@@ -1,0 +1,796 @@
+@model ExcelComparator.Models.AdvancedAnalysisModel
+
+@{
+    ViewData["Title"] = "Gelişmiş Veri Analizi";
+    var filterPresets = ViewBag.FilterPresets as List<ExcelComparator.Models.FilterPreset>;
+    var analysisResult = ViewBag.AnalysisResult as ExcelComparator.Models.DataAnalysisResult;
+}
+
+@if (ViewBag.Error != null)
+{
+    <div class="alert alert-danger alert-custom">
+        <i class="fas fa-exclamation-triangle me-2"></i>
+        @ViewBag.Error
+    </div>
+}
+
+@if (ViewBag.Success != null)
+{
+    <div class="alert alert-success alert-custom">
+        <i class="fas fa-check-circle me-2"></i>
+        @ViewBag.Success
+    </div>
+}
+
+<!-- Ana Form -->
+<div class="row">
+    <div class="col-lg-4">
+        <!-- Dosya Yükleme -->
+        <div class="card analysis-card">
+            <div class="card-header">
+                <h5 class="mb-0">
+                    <i class="fas fa-file-upload me-2"></i>
+                    Veri Dosyası
+                </h5>
+            </div>
+            <div class="card-body">
+                <form asp-action="AnalyzeData" method="post" enctype="multipart/form-data" id="analysisForm">
+                    <div class="file-upload-zone">
+                        <input type="file" asp-for="DataFile" class="form-control mb-3" accept=".xlsx,.xls" required>
+                        <small class="text-muted">Excel dosyanızı seçin (.xlsx, .xls)</small>
+                    </div>
+
+                    <!-- Hazır Filter Presetleri -->
+                    <div class="mt-4">
+                        <h6 class="fw-bold mb-3">
+                            <i class="fas fa-magic me-2"></i>
+                            Hazır Filtre Setleri
+                        </h6>
+
+                        <div class="preset-grid">
+                            @if (filterPresets != null)
+                            {
+                                @foreach (var preset in filterPresets)
+                                {
+                                    <div class="preset-card">
+                                        <button type="button" class="btn btn-outline-@preset.Color btn-sm preset-btn"
+                                            onclick="applyPreset('@preset.Name')">
+                                            <i class="@preset.Icon me-1"></i>
+                                            @preset.Name
+                                        </button>
+                                        <small class="preset-description">@preset.Description</small>
+                                    </div>
+                                }
+                            }
+                        </div>
+                    </div>
+
+                    <!-- Manuel Filtre Ekleme -->
+                    <div class="mt-4">
+                        <h6 class="fw-bold mb-3">
+                            <i class="fas fa-filter me-2"></i>
+                            Manuel Filtre Ekle
+                        </h6>
+
+                        <div class="filter-input-group">
+                            <div class="row g-2">
+                                <div class="col-12">
+                                    <label class="form-label">Sütun Adı</label>
+                                    <input type="text" class="form-control" id="newColumnName"
+                                        placeholder="örn: Email, TC Kimlik No, Telefon">
+                                </div>
+                                <div class="col-8">
+                                    <label class="form-label">Değer</label>
+                                    <input type="text" class="form-control" id="newValue"
+                                        placeholder="örn: gmail.com, 123, 0532">
+                                </div>
+                                <div class="col-4">
+                                    <label class="form-label">Tip</label>
+                                    <select class="form-select" id="newFilterType">
+                                        <option value="Contains">İçerir</option>
+                                        <option value="Equals">Eşittir</option>
+                                        <option value="StartsWith">İle Başlar</option>
+                                        <option value="EndsWith">İle Biter</option>
+                                        <option value="EmailDomain">Email Domain</option>
+                                        <option value="TcPrefix">TC Prefix</option>
+                                        <option value="Regex">Regex</option>
+                                    </select>
+                                </div>
+                                <div class="col-12">
+                                    <button type="button" class="btn btn-outline-primary btn-sm w-100"
+                                        onclick="addFilter()">
+                                        <i class="fas fa-plus me-1"></i>Filtre Ekle
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Aktif Filtreler -->
+                    @if (Model.Filters.Any())
+                    {
+                        <div class="mt-4">
+                            <h6 class="fw-bold mb-3">
+                                <i class="fas fa-list me-2"></i>
+                                Aktif Filtreler (@Model.Filters.Count)
+                            </h6>
+
+                            <div class="active-filters">
+                                @for (int i = 0; i < Model.Filters.Count; i++)
+                                {
+                                    var filter = Model.Filters[i];
+                                    <div class="filter-item">
+                                        <div class="filter-content">
+                                            <strong>@filter.ColumnName</strong>
+                                            <span class="filter-type">(@filter.FilterType)</span>
+                                            <br>
+                                            <small class="text-muted">@filter.Description</small>
+                                        </div>
+                                        <button type="button" class="btn btn-outline-danger btn-sm" onclick="removeFilter(@i)">
+                                            <i class="fas fa-times"></i>
+                                        </button>
+                                    </div>
+                                    <input type="hidden" name="Filters[@i].ColumnName" value="@filter.ColumnName" />
+                                    <input type="hidden" name="Filters[@i].Value" value="@filter.Value" />
+                                    <input type="hidden" name="Filters[@i].FilterType" value="@filter.FilterType" />
+                                    <input type="hidden" name="Filters[@i].Description" value="@filter.Description" />
+                                }
+                            </div>
+                        </div>
+                    }
+
+                    <!-- Analiz Butonları -->
+                    <div class="mt-4 d-grid gap-2">
+                        <button type="submit" class="btn btn-primary btn-lg">
+                            <i class="fas fa-chart-bar me-2"></i>
+                            Analiz Başlat
+                        </button>
+
+                        <button type="button" class="btn btn-outline-secondary" onclick="clearAllFilters()">
+                            <i class="fas fa-broom me-1"></i>
+                            Tüm Filtreleri Temizle
+                        </button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+
+    <div class="col-lg-8">
+        @if (analysisResult != null)
+        {
+            <!-- Analiz Sonuçları -->
+            <div class="card analysis-card">
+                <div class="card-header">
+                    <h5 class="mb-0">
+                        <i class="fas fa-chart-line me-2"></i>
+                        Analiz Sonuçları
+                    </h5>
+                </div>
+                <div class="card-body">
+
+                    <!-- İstatistikler -->
+                    <div class="row mb-4">
+                        <div class="col-md-2">
+                            <div class="stat-box stat-primary">
+                                <div class="stat-number">@analysisResult.FilterResult.TotalRecords</div>
+                                <div class="stat-label">Toplam Kayıt</div>
+                            </div>
+                        </div>
+                        <div class="col-md-2">
+                            <div class="stat-box stat-success" onclick="showDataType('filtered')" style="cursor: pointer;">
+                                <div class="stat-number">@analysisResult.FilterResult.FilteredRecords</div>
+                                <div class="stat-label">Filtrelenen</div>
+                                <small class="text-muted">Tıkla</small>
+                            </div>
+                        </div>
+                        <div class="col-md-2">
+                            <div class="stat-box stat-warning" onclick="showDataType('excluded')" style="cursor: pointer;">
+                                <div class="stat-number">@(analysisResult.FilterResult.TotalRecords -
+                                                                    analysisResult.FilterResult.FilteredRecords)</div>
+                                <div class="stat-label">Uymayanlar</div>
+                                <small class="text-muted">Tıkla</small>
+                            </div>
+                        </div>
+                        <div class="col-md-2">
+                            <div class="stat-box stat-danger" onclick="showDataType('empty')" style="cursor: pointer;">
+                                <div class="stat-number" id="emptyDataCount">-</div>
+                                <div class="stat-label">Boş Alanlar</div>
+                                <small class="text-muted">Tıkla</small>
+                            </div>
+                        </div>
+                        <div class="col-md-2">
+                            <div class="stat-box stat-info">
+                                <div class="stat-number">@analysisResult.FilterResult.Headers.Count</div>
+                                <div class="stat-label">Sütun Sayısı</div>
+                            </div>
+                        </div>
+                        <div class="col-md-2">
+                            <div class="stat-box stat-secondary">
+                                <div class="stat-number">
+                                    @((analysisResult.FilterResult.TotalRecords > 0 ?
+                                                                    (double)analysisResult.FilterResult.FilteredRecords /
+                                                                    analysisResult.FilterResult.TotalRecords * 100 : 0).ToString("F1"))%
+                                </div>
+                                <div class="stat-label">Filtreleme Oranı</div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- İçgörüler -->
+                    @if (analysisResult.Insights.Any())
+                    {
+                        <div class="insights-section mb-4">
+                            <h6 class="fw-bold mb-3">
+                                <i class="fas fa-lightbulb me-2"></i>
+                                İçgörüler
+                            </h6>
+                            <div class="insights-list">
+                                @foreach (var insight in analysisResult.Insights)
+                                {
+                                    <div class="insight-item">
+                                        @Html.Raw(insight)
+                                    </div>
+                                }
+                            </div>
+                        </div>
+                    }
+
+                    <!-- Filtrelenmiş Veriler -->
+                    <div class="filtered-data-section">
+                        <div class="d-flex justify-content-between align-items-center mb-3 flex-wrap">
+                            <h6 class="fw-bold mb-0">
+                                <i class="fas fa-table me-2"></i>
+                                <span id="dataTypeTitle">Filtrelenmiş Veriler</span>
+                                <span class="badge bg-success ms-2"
+                                    id="dataTypeCount">@analysisResult.FilterResult.FilteredRecords</span>
+                            </h6>
+
+                            <div class="control-buttons-container">
+                                <div class="row g-2">
+                                    <!-- Kayıt Sayısı Seçici -->
+                                    <div class="col-auto">
+                                        <div class="dropdown">
+                                            <button type="button" class="btn btn-outline-info btn-sm dropdown-toggle"
+                                                data-bs-toggle="dropdown" aria-expanded="false">
+                                                <i class="fas fa-list me-1"></i><span id="currentLimit">100</span> Kayıt
+                                            </button>
+                                            <ul class="dropdown-menu">
+                                                <li><a class="dropdown-item" href="javascript:void(0)"
+                                                        onclick="changeLimit(10)">
+                                                        <i class="fas fa-list me-2"></i>İlk 10 Kayıt
+                                                    </a></li>
+                                                <li><a class="dropdown-item" href="javascript:void(0)"
+                                                        onclick="changeLimit(50)">
+                                                        <i class="fas fa-list me-2"></i>İlk 50 Kayıt
+                                                    </a></li>
+                                                <li><a class="dropdown-item" href="javascript:void(0)"
+                                                        onclick="changeLimit(100)">
+                                                        <i class="fas fa-list me-2"></i>İlk 100 Kayıt
+                                                    </a></li>
+                                                <li><a class="dropdown-item" href="javascript:void(0)"
+                                                        onclick="changeLimit(500)">
+                                                        <i class="fas fa-list me-2"></i>İlk 500 Kayıt
+                                                    </a></li>
+                                                <li><a class="dropdown-item" href="javascript:void(0)"
+                                                        onclick="changeLimit(1000)">
+                                                        <i class="fas fa-list me-2"></i>İlk 1000 Kayıt
+                                                    </a></li>
+                                                <li>
+                                                    <hr class="dropdown-divider">
+                                                </li>
+                                                <li><a class="dropdown-item" href="javascript:void(0)"
+                                                        onclick="changeLimit(999999)">
+                                                        <i class="fas fa-infinity me-2"></i>Tümünü Göster
+                                                    </a></li>
+                                            </ul>
+                                        </div>
+                                    </div>
+
+                                    <!-- Veri Tipi Seçici -->
+                                    <div class="col-auto">
+                                        <div class="dropdown">
+                                            <button type="button" class="btn btn-outline-secondary btn-sm dropdown-toggle"
+                                                data-bs-toggle="dropdown" aria-expanded="false">
+                                                <i class="fas fa-filter me-1"></i>Veri Tipi
+                                            </button>
+                                            <ul class="dropdown-menu">
+                                                <li><a class="dropdown-item" href="javascript:void(0)"
+                                                        onclick="showDataType('filtered')">
+                                                        <i class="fas fa-check text-success me-2"></i>Filtrelenmiş Veriler
+                                                    </a></li>
+                                                <li><a class="dropdown-item" href="javascript:void(0)"
+                                                        onclick="showDataType('excluded')">
+                                                        <i class="fas fa-times text-warning me-2"></i>Filtreye Uymayan
+                                                        Veriler
+                                                    </a></li>
+                                                <li><a class="dropdown-item" href="javascript:void(0)"
+                                                        onclick="showDataType('empty')">
+                                                        <i class="fas fa-question text-danger me-2"></i>Boş Veriler
+                                                    </a></li>
+                                            </ul>
+                                        </div>
+                                    </div>
+
+                                    <!-- Export Butonları -->
+                                    <div class="col-auto">
+                                        <div class="dropdown">
+                                            <button type="button" class="btn btn-outline-success btn-sm dropdown-toggle"
+                                                data-bs-toggle="dropdown" aria-expanded="false">
+                                                <i class="fas fa-download me-1"></i>İndir
+                                            </button>
+                                            <ul class="dropdown-menu">
+                                                <li><a class="dropdown-item" href="javascript:void(0)"
+                                                        onclick="exportToCSV()">
+                                                        <i class="fas fa-file-csv text-info me-2"></i>CSV Olarak İndir
+                                                    </a></li>
+                                                <li>
+                                                    <hr class="dropdown-divider">
+                                                </li>
+                                                <li>
+                                                    <h6 class="dropdown-header">Excel Formatında</h6>
+                                                </li>
+                                                <li><a class="dropdown-item" href="javascript:void(0)"
+                                                        onclick="exportToExcel('filtered')">
+                                                        <i class="fas fa-file-excel text-success me-2"></i>Filtrelenmiş
+                                                        Veriler
+                                                    </a></li>
+                                                <li><a class="dropdown-item" href="javascript:void(0)"
+                                                        onclick="exportToExcel('excluded')">
+                                                        <i class="fas fa-file-excel text-warning me-2"></i>Uymayanlar
+                                                    </a></li>
+                                                <li><a class="dropdown-item" href="javascript:void(0)"
+                                                        onclick="exportToExcel('empty')">
+                                                        <i class="fas fa-file-excel text-danger me-2"></i>Boş Veriler
+                                                    </a></li>
+                                            </ul>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Loading Indicator -->
+                        <div class="loading-container d-none" id="loadingIndicator">
+                            <div class="text-center py-4">
+                                <div class="spinner-border text-primary" role="status">
+                                    <span class="visually-hidden">Yükleniyor...</span>
+                                </div>
+                                <p class="mt-2 text-muted">Veriler yükleniyor...</p>
+                            </div>
+                        </div>
+
+                        <div class="table-responsive" style="max-height: 500px; overflow-y: auto;" id="dataTableContainer">
+                            <table class="table table-striped table-hover" id="filteredDataTable">
+                                <thead class="table-dark sticky-top">
+                                    <tr>
+                                        <th>#</th>
+                                        @foreach (var header in analysisResult.FilterResult.Headers)
+                                        {
+                                            <th>@header</th>
+                                        }
+                                    </tr>
+                                </thead>
+                                <tbody id="dataTableBody">
+                                    @for (int i = 0; i < Math.Min(100, analysisResult.FilterResult.FilteredData.Count); i++)
+                                    {
+                                        var row = analysisResult.FilterResult.FilteredData[i];
+                                        <tr>
+                                            <td class="fw-bold text-primary">@(i + 1)</td>
+                                            @foreach (var header in analysisResult.FilterResult.Headers)
+                                            {
+                                                <td>
+                                                    @{
+                                                        var value = row.ContainsKey(header) ? row[header]?.ToString() ?? "" : "";
+                                                    }
+                                                    @if (string.IsNullOrWhiteSpace(value))
+                                                    {
+                                                        <span class="text-muted fst-italic">Boş</span>
+                                                    }
+                                                    else if (value.Length > 30)
+                                                    {
+                                                        <span title="@value">@(value.Substring(0, 30))...</span>
+                                                    }
+                                                    else
+                                                    {
+                                                        @value
+                                                    }
+                                                </td>
+                                            }
+                                        </tr>
+                                    }
+                                </tbody>
+                            </table>
+                        </div>
+
+                        <!-- Veri Bilgisi -->
+                        <div class="data-info mt-3" id="dataInfo">
+                            <div class="row">
+                                <div class="col-md-6">
+                                    <small class="text-muted" id="displayInfo">
+                                        İlk 100 kayıt gösteriliyor.
+                                        (Toplam: @analysisResult.FilterResult.FilteredRecords kayıt)
+                                    </small>
+                                </div>
+                                <div class="col-md-6 text-end">
+                                    <small class="text-muted">
+                                        <i class="fas fa-info-circle me-1"></i>
+                                        Boş alanlar <span class="fst-italic text-muted">"Boş"</span> olarak işaretlendi
+                                    </small>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        }
+        else
+        {
+            <!-- Boş Durum -->
+            <div class="card analysis-card">
+                <div class="card-body text-center">
+                    <i class="fas fa-chart-bar text-muted mb-3" style="font-size: 4rem;"></i>
+                    <h5 class="text-muted">Gelişmiş Veri Analizi</h5>
+                    <p class="text-muted">
+                        Sol taraftan bir Excel dosyası yükleyin ve filtrelerinizi ayarlayın.
+                        <br>Analiz başlattığınızda sonuçlar burada görünecek.
+                    </p>
+
+                    <div class="feature-list mt-4">
+                        <div class="feature-item">
+                            <i class="fas fa-filter text-primary me-2"></i>
+                            <strong>Akıllı Filtreleme:</strong> Email domain, TC prefix, regex desteği
+                        </div>
+                        <div class="feature-item">
+                            <i class="fas fa-chart-line text-success me-2"></i>
+                            <strong>Detaylı Analiz:</strong> İstatistikler ve içgörüler
+                        </div>
+                        <div class="feature-item">
+                            <i class="fas fa-download text-info me-2"></i>
+                            <strong>Export:</strong> Filtrelenmiş verileri CSV/Excel olarak indirin
+                        </div>
+                    </div>
+                </div>
+            </div>
+        }
+    </div>
+</div>
+
+<script>
+    // Global değişkenler
+    let currentDataType = 'filtered';
+    let currentLimit = 100;
+    let currentData = [];
+    let allHeaders = [];
+    let hasAnalysisResult = @(analysisResult != null ? "true" : "false");
+
+    // Preset uygulama
+    function applyPreset(presetName) {
+        const form = document.createElement('form');
+        form.method = 'POST';
+        form.action = '@Url.Action("ApplyPreset")';
+
+        const presetInput = document.createElement('input');
+        presetInput.type = 'hidden';
+        presetInput.name = 'presetName';
+        presetInput.value = presetName;
+        form.appendChild(presetInput);
+
+        document.body.appendChild(form);
+        form.submit();
+    }
+
+    // Manuel filtre ekleme
+    function addFilter() {
+        const columnName = document.getElementById('newColumnName').value;
+        const value = document.getElementById('newValue').value;
+        const filterType = document.getElementById('newFilterType').value;
+
+        if (!columnName || !value) {
+            alert('Lütfen sütun adı ve değer girin.');
+            return;
+        }
+
+        const form = document.createElement('form');
+        form.method = 'POST';
+        form.action = '@Url.Action("AddFilter")';
+
+    // Mevcut filtreleri ekle
+    @for (int i = 0; i < Model.Filters.Count; i++)
+            {
+                <text>
+                    addHiddenInput(form, 'Filters[@i].ColumnName', '@Html.Raw(Model.Filters[i].ColumnName)');
+                    addHiddenInput(form, 'Filters[@i].Value', '@Html.Raw(Model.Filters[i].Value)');
+                    addHiddenInput(form, 'Filters[@i].FilterType', '@Model.Filters[i].FilterType');
+                    addHiddenInput(form, 'Filters[@i].Description', '@Html.Raw(Model.Filters[i].Description)');
+                </text>
+        }
+
+            // Yeni filtreyi ekle
+            addHiddenInput(form, 'columnName', columnName);
+        addHiddenInput(form, 'value', value);
+        addHiddenInput(form, 'filterType', filterType);
+
+        document.body.appendChild(form);
+        form.submit();
+    }
+
+    function addHiddenInput(form, name, value) {
+        const input = document.createElement('input');
+        input.type = 'hidden';
+        input.name = name;
+        input.value = value;
+        form.appendChild(input);
+    }
+
+    // Filtre silme
+    function removeFilter(index) {
+        const form = document.createElement('form');
+        form.method = 'POST';
+        form.action = '@Url.Action("RemoveFilter")';
+
+        addHiddenInput(form, 'filterIndex', index);
+
+        document.body.appendChild(form);
+        form.submit();
+    }
+
+    // Tüm filtreleri temizle
+    function clearAllFilters() {
+        if (confirm('Tüm filtreler silinecek. Devam etmek istiyor musunuz?')) {
+            window.location.href = '@Url.Action("Index")';
+        }
+    }
+
+    // Veri tipi değiştirme
+    function showDataType(dataType) {
+        if (!hasAnalysisResult) {
+            alert('Önce analiz yapmalısınız.');
+            return;
+        }
+
+        currentDataType = dataType;
+        loadData();
+    }
+
+    // Kayıt sayısı değiştirme
+    function changeLimit(limit) {
+        if (!hasAnalysisResult) {
+            alert('Önce analiz yapmalısınız.');
+            return;
+        }
+
+        currentLimit = limit;
+        document.getElementById('currentLimit').textContent = limit === 999999 ? 'Tümü' : limit;
+        loadData();
+    }
+
+    // Veri yükleme
+    function loadData() {
+        const loadingIndicator = document.getElementById('loadingIndicator');
+        const dataTableContainer = document.getElementById('dataTableContainer');
+
+        if (!loadingIndicator || !dataTableContainer) {
+            console.error('DOM elementleri bulunamadı');
+            return;
+        }
+
+        // Loading göster
+        loadingIndicator.classList.remove('d-none');
+        dataTableContainer.style.opacity = '0.5';
+
+        // AJAX request
+        fetch('@Url.Action("GetDataByType")', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/x-www-form-urlencoded',
+            },
+            body: `dataType=${currentDataType}&limit=${currentLimit}`
+        })
+            .then(response => response.json())
+            .then(data => {
+                loadingIndicator.classList.add('d-none');
+                dataTableContainer.style.opacity = '1';
+
+                if (data.success) {
+                    updateTable(data);
+                    updateStatistics(data);
+                } else {
+                    alert('Hata: ' + data.message);
+                }
+            })
+            .catch(error => {
+                loadingIndicator.classList.add('d-none');
+                dataTableContainer.style.opacity = '1';
+                console.error('Error:', error);
+                alert('Veri yüklenirken hata oluştu: ' + error.message);
+            });
+    }
+
+    // Tabloyu güncelle
+    function updateTable(data) {
+        const tableBody = document.getElementById('dataTableBody');
+        const title = document.getElementById('dataTypeTitle');
+        const count = document.getElementById('dataTypeCount');
+
+        if (!tableBody || !title || !count) {
+            console.error('Tablo elementleri bulunamadı');
+            return;
+        }
+
+        // Başlık ve sayıyı güncelle
+        title.textContent = data.title;
+        count.textContent = data.totalCount;
+        count.className = `badge ms-2 ${getColorClass(currentDataType)}`;
+
+        // Tabloyu temizle
+        tableBody.innerHTML = '';
+
+        // Yeni verileri ekle
+        data.data.forEach((row, index) => {
+            const tr = document.createElement('tr');
+
+            // Sıra numarası
+            const indexTd = document.createElement('td');
+            indexTd.className = 'fw-bold text-primary';
+            indexTd.textContent = index + 1;
+            tr.appendChild(indexTd);
+
+            // Veri hücreleri
+            data.headers.forEach(header => {
+                const td = document.createElement('td');
+                const value = row[header] || '';
+
+                if (!value || value.toString().trim() === '') {
+                    td.innerHTML = '<span class="text-muted fst-italic">Boş</span>';
+                } else if (value.toString().length > 30) {
+                    td.innerHTML = `<span title="${value}">${value.toString().substring(0, 30)}...</span>`;
+                } else {
+                    td.textContent = value;
+                }
+
+                tr.appendChild(td);
+            });
+
+            tableBody.appendChild(tr);
+        });
+
+        // Veri bilgisini güncelle
+        updateDataInfo(data);
+
+        // Global değişkenleri güncelle
+        currentData = data.data;
+        allHeaders = data.headers;
+    }
+
+    // İstatistikleri güncelle
+    function updateStatistics(data) {
+        if (currentDataType === 'empty') {
+            const emptyCountElement = document.getElementById('emptyDataCount');
+            if (emptyCountElement) {
+                emptyCountElement.textContent = data.totalCount;
+            }
+        }
+    }
+
+    // Veri bilgisini güncelle
+    function updateDataInfo(data) {
+        const displayInfo = document.getElementById('displayInfo');
+        if (!displayInfo) return;
+
+        const limitText = currentLimit === 999999 ? 'Tüm' : `İlk ${currentLimit}`;
+
+        if (data.hasMore) {
+            displayInfo.innerHTML = `${limitText} kayıt gösteriliyor. (Toplam: ${data.totalCount} kayıt)`;
+        } else {
+            displayInfo.innerHTML = `${data.displayedCount} kayıt gösteriliyor. (Toplam: ${data.totalCount} kayıt)`;
+        }
+    }
+
+    // Renk sınıfı al
+    function getColorClass(dataType) {
+        switch (dataType) {
+            case 'filtered': return 'bg-success';
+            case 'excluded': return 'bg-warning';
+            case 'empty': return 'bg-danger';
+            default: return 'bg-primary';
+        }
+    }
+
+    // CSV Export
+    function exportToCSV() {
+        if (!hasAnalysisResult) {
+            alert('Önce analiz yapmalısınız.');
+            return;
+        }
+
+        if (currentData.length === 0) {
+            alert('Exportlanacak veri bulunamadı.');
+            return;
+        }
+
+        let csv = '';
+
+        // Headers
+        const headers = ['#', ...allHeaders];
+        csv += headers.map(h => `"${h}"`).join(',') + '\n';
+
+        // Data rows
+        currentData.forEach((row, index) => {
+            const rowData = [index + 1];
+            allHeaders.forEach(header => {
+                const value = row[header] || '';
+                rowData.push(`"${value.toString().replace(/"/g, '""')}"`);
+            });
+            csv += rowData.join(',') + '\n';
+        });
+
+        // Download
+        const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+        const url = window.URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = `${currentDataType}_veriler_${new Date().getTime()}.csv`;
+        a.click();
+        window.URL.revokeObjectURL(url);
+    }
+
+    // Excel Export
+    function exportToExcel(dataType) {
+        if (!hasAnalysisResult) {
+            alert('Önce analiz yapmalısınız.');
+            return;
+        }
+
+        // Loading göster
+        const button = event.target.closest('a');
+        const originalText = button.innerHTML;
+        button.innerHTML = '<i class="fas fa-spinner fa-spin me-1"></i>İndiriliyor...';
+
+        fetch('@Url.Action("ExportToExcel")', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/x-www-form-urlencoded',
+            },
+            body: `dataType=${dataType}`
+        })
+            .then(response => {
+                if (response.ok) {
+                    return response.blob();
+                } else {
+                    throw new Error('Export hatası');
+                }
+            })
+            .then(blob => {
+                const url = window.URL.createObjectURL(blob);
+                const a = document.createElement('a');
+                a.href = url;
+                a.download = `${dataType}_veriler_${new Date().getTime()}.xlsx`;
+                a.click();
+                window.URL.revokeObjectURL(url);
+
+                // Button'u eski haline getir
+                button.innerHTML = originalText;
+            })
+            .catch(error => {
+                console.error('Error:', error);
+                alert('Excel dosyası indirilirken hata oluştu: ' + error.message);
+
+                // Button'u eski haline getir
+                button.innerHTML = originalText;
+            });
+    }
+
+    // Sayfa yüklendiğinde
+    document.addEventListener('DOMContentLoaded', function () {
+        if (hasAnalysisResult) {
+            // İlk yüklemede boş veri sayısını hesapla
+            setTimeout(() => {
+                showDataType('empty');
+                setTimeout(() => {
+                    showDataType('filtered');
+                }, 1000);
+            }, 500);
+        }
+    });
+</script>

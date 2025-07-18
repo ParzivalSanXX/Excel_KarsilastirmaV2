@@ -1,0 +1,696 @@
+﻿@model ExcelComparator.Models.ExcelComparisonModel
+
+@{
+    ViewData["Title"] = "Excel Karşılaştırma";
+}
+
+@if (ViewBag.Error != null)
+{
+    <div class="alert alert-danger alert-custom">
+        <i class="fas fa-exclamation-triangle me-2"></i>
+        @ViewBag.Error
+    </div>
+}
+
+@if (ViewBag.Success != null)
+{
+    <div class="alert alert-success alert-custom">
+        <i class="fas fa-check-circle me-2"></i>
+        @ViewBag.Success
+    </div>
+}
+@* @if (ViewBag.Results != null)
+{
+    <div class="download-buttons" style="margin-top: 20px;">
+        <h4>Excel'e Aktar:</h4>
+        <a asp-action="DownloadResult" asp-route-type="exact" class="btn btn-success m-1">✅ Tam Eşleşenler</a>
+        <a asp-action="DownloadResult" asp-route-type="partial" class="btn btn-warning m-1">🟡 Kısmi Eşleşenler</a>
+        <a asp-action="DownloadResult" asp-route-type="onlyMain" class="btn btn-info m-1">📘 Sadece Ana Dosyada</a>
+        <a asp-action="DownloadResult" asp-route-type="onlyComparison" class="btn btn-danger m-1">📕 Sadece Karş.
+            Dosyada</a>
+    </div>
+} *@
+
+
+<form asp-action="Compare" method="post" enctype="multipart/form-data" id="uploadForm">
+    <div class="row">
+        <!-- Sol Taraf - Ana Excel Dosyası -->
+        <div class="col-md-6">
+            <div class="file-upload-section main-file">
+                <i class="fas fa-file-excel upload-icon"></i>
+                <h4 class="mb-3">Ana Excel Dosyası</h4>
+                <p class="text-muted mb-3">Karşılaştırma yapılacak ana Excel dosyasını seçin</p>
+
+                <input type="file" asp-for="MainExcelFile" class="form-control form-control-lg mb-3" accept=".xlsx,.xls"
+                    required>
+
+                <div class="upload-text">
+                    <small class="text-muted">Maksimum dosya boyutu: 100MB</small>
+                </div>
+            </div>
+
+            <!-- Çoklu Anahtar Sütunu Seçimi -->
+            <div class="mb-3">
+                <label asp-for="PrimaryKeyColumns" class="form-label fw-bold">
+                    <i class="fas fa-key me-2"></i>Anahtar Sütun(lar)
+                </label>
+
+                <div class="key-input-container">
+                    <div class="input-group">
+                        <span class="input-group-text">
+                            <i class="fas fa-search"></i>
+                        </span>
+                        <input asp-for="PrimaryKeyColumns" class="form-control"
+                            placeholder="Örn: Ad Soyad, TC Kimlik No, Email" value="Ad Soyad" id="keyColumnsInput">
+                        <button type="button" class="btn btn-outline-secondary" id="addKeyBtn">
+                            <i class="fas fa-plus"></i>
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Anahtar Sütun Önerileri -->
+                <div class="key-suggestions mt-2">
+                    <small class="text-muted d-block mb-2">Hızlı seçim:</small>
+                    <div class="suggestion-buttons">
+                        <button type="button" class="btn btn-outline-primary btn-sm suggestion-btn" data-key="Ad Soyad">
+                            <i class="fas fa-user me-1"></i>Ad Soyad
+                        </button>
+                        <button type="button" class="btn btn-outline-info btn-sm suggestion-btn"
+                            data-key="TC Kimlik No">
+                            <i class="fas fa-id-card me-1"></i>TC Kimlik
+                        </button>
+                        <button type="button" class="btn btn-outline-warning btn-sm suggestion-btn" data-key="Email">
+                            <i class="fas fa-envelope me-1"></i>Email
+                        </button>
+                        <button type="button" class="btn btn-outline-success btn-sm suggestion-btn" data-key="Telefon">
+                            <i class="fas fa-phone me-1"></i>Telefon
+                        </button>
+                        <button type="button" class="btn btn-outline-secondary btn-sm suggestion-btn" data-key="ID">
+                            <i class="fas fa-hashtag me-1"></i>ID
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Seçili Anahtarlar -->
+                <div class="selected-keys mt-3" id="selectedKeys" style="display: none;">
+                    <small class="text-muted d-block mb-2">Seçili anahtar sütunlar:</small>
+                    <div class="selected-keys-container" id="selectedKeysContainer">
+                        <!-- Dinamik olarak eklenir -->
+                    </div>
+                </div>
+
+                <div class="form-text">
+                    <i class="fas fa-info-circle me-1"></i>
+                    <strong>Tek anahtar:</strong> "Ad Soyad" <br>
+                    <strong>Çoklu anahtar:</strong> "Ad Soyad, TC Kimlik No, Email" (virgülle ayırın)
+                    <br><small class="text-success">
+                        <i class="fas fa-lightbulb me-1"></i>
+                        Çoklu anahtar kullanımı daha kesin sonuçlar verir!
+                    </small>
+                </div>
+            </div>
+        </div>
+
+        <!-- Sağ Taraf - Karşılaştırma Dosyaları -->
+        <div class="col-md-6">
+            <div class="file-upload-section comparison-files">
+                <i class="fas fa-files upload-icon"></i>
+                <h4 class="mb-3">Karşılaştırma Dosyaları</h4>
+                <p class="text-muted mb-3">Karşılaştırılacak Excel dosyalarını seçin (1-5 adet)</p>
+
+                <input type="file" name="ComparisonFiles" class="form-control form-control-lg mb-3" accept=".xlsx,.xls"
+                    multiple required>
+
+                <div class="upload-text">
+                    <small class="text-muted">Ctrl tuşu ile birden fazla dosya seçebilirsiniz</small>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="text-center mt-4">
+        <button type="submit" class="btn btn-custom btn-lg me-3">
+            <i class="fas fa-search me-2"></i>
+            Karşılaştırmayı Başlat
+        </button>
+
+        <button type="button" class="btn btn-outline-secondary btn-lg" id="resetBtn">
+            <i class="fas fa-redo me-2"></i>
+            Sayfayı Sıfırla
+        </button>
+    </div>
+</form>
+
+@if (ViewBag.Results != null)
+{
+    var results = ViewBag.Results as List<ExcelComparator.Models.ComparisonResult>;
+
+    <div class="mt-5">
+        <!-- Yeni Karşılaştırma Butonu -->
+        <div class="text-center mb-4">
+            <div class="alert alert-success d-inline-block">
+                <i class="fas fa-check-circle me-2"></i>
+                Karşılaştırma tamamlandı!
+                <button type="button" class="btn btn-success btn-sm ms-3" id="newComparisonBtn">
+                    <i class="fas fa-plus me-1"></i>Yeni Karşılaştırma
+                </button>
+                <button type="button" class="btn btn-outline-success btn-sm ms-2" onclick="window.print()">
+                    <i class="fas fa-print me-1"></i>Yazdır
+                </button>
+            </div>
+        </div>
+
+        <h2 class="mb-4 text-center">
+            <i class="fas fa-chart-bar me-2"></i>
+            Karşılaştırma Sonuçları
+        </h2>
+
+        @if (results != null)
+        {
+            @foreach (var result in results)
+            {
+                <div class="result-card">
+                    <div class="card-header">
+                        <h4 class="text-primary mb-3">
+                            <i class="fas fa-file-alt me-2"></i>
+                            @result.FileName
+                        </h4>
+
+                        <!-- Kullanılan Anahtar Sütunları Göster -->
+                        @if (result.UsedKeyColumns != null && result.UsedKeyColumns.Any())
+                        {
+                            <div class="used-keys-info mb-3">
+                                <small class="text-muted">
+                                    <i class="fas fa-key me-1"></i>
+                                    Kullanılan anahtar sütunlar:
+                                    @foreach (var key in result.UsedKeyColumns)
+                                    {
+                                        <span class="badge bg-info me-1">@key</span>
+                                    }
+                                </small>
+                            </div>
+                        }
+
+                        <div class="row statistics-grid">
+                            <div class="col-md-3">
+                                <div class="stat-card stat-success">
+                                    <div class="stat-number">@result.Matches.Count</div>
+                                    <div class="stat-label">Tam Eşleşme</div>
+                                </div>
+                            </div>
+                            <div class="col-md-3">
+                                <div class="stat-card stat-warning">
+                                    <div class="stat-number">@result.Mismatches.Count</div>
+                                    <div class="stat-label">Kısmi Eşleşme</div>
+                                </div>
+                            </div>
+                            <div class="col-md-3">
+                                <div class="stat-card stat-info">
+                                    <div class="stat-number">@result.OnlyInMain.Count</div>
+                                    <div class="stat-label">Sadece Ana Dosyada</div>
+                                </div>
+                            </div>
+                            <div class="col-md-3">
+                                <div class="stat-card stat-secondary">
+                                    <div class="stat-number">@result.OnlyInComparison.Count</div>
+                                    <div class="stat-label">Sadece Karş. Dosyada</div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+@if (ViewBag.Results != null)
+{
+    <div class="download-buttons" style="margin-top: 20px;">
+        <h4>Excel'e Aktar:</h4>
+        <a asp-action="DownloadResult" asp-route-type="exact" class="btn btn-success m-1">✅ Tam Eşleşenler</a>
+        <a asp-action="DownloadResult" asp-route-type="partial" class="btn btn-warning m-1">🟡 Kısmi Eşleşenler</a>
+        <a asp-action="DownloadResult" asp-route-type="onlyMain" class="btn btn-info m-1">📘 Sadece Ana Dosyada</a>
+        <a asp-action="DownloadResult" asp-route-type="onlyComparison" class="btn btn-danger m-1">📕 Sadece Karş. Dosyada</a>
+    </div>
+}
+
+                    <!-- Tab Navigation -->
+                    <ul class="nav nav-tabs custom-tabs" id="myTab@(results.IndexOf(result))" role="tablist">
+                        <li class="nav-item" role="presentation">
+                            <button class="nav-link active" id="matches-tab-@(results.IndexOf(result))" data-bs-toggle="tab"
+                                data-bs-target="#matches-@(results.IndexOf(result))" type="button" role="tab">
+                                <i class="fas fa-check-circle me-1"></i>
+                                Tam Eşleşenler (@result.Matches.Count)
+                            </button>
+                        </li>
+                        <li class="nav-item" role="presentation">
+                            <button class="nav-link" id="mismatches-tab-@(results.IndexOf(result))" data-bs-toggle="tab"
+                                data-bs-target="#mismatches-@(results.IndexOf(result))" type="button" role="tab">
+                                <i class="fas fa-exclamation-triangle me-1"></i>
+                                Kısmi Eşleşenler (@result.Mismatches.Count)
+                            </button>
+                        </li>
+                        <li class="nav-item" role="presentation">
+                            <button class="nav-link" id="only-main-tab-@(results.IndexOf(result))" data-bs-toggle="tab"
+                                data-bs-target="#only-main-@(results.IndexOf(result))" type="button" role="tab">
+                                <i class="fas fa-arrow-left me-1"></i>
+                                Sadece Ana Dosyada (@result.OnlyInMain.Count)
+                            </button>
+                        </li>
+                        <li class="nav-item" role="presentation">
+                            <button class="nav-link" id="only-comp-tab-@(results.IndexOf(result))" data-bs-toggle="tab"
+                                data-bs-target="#only-comp-@(results.IndexOf(result))" type="button" role="tab">
+                                <i class="fas fa-arrow-right me-1"></i>
+                                Sadece Karş. Dosyada (@result.OnlyInComparison.Count)
+                            </button>
+                        </li>
+                    </ul>
+
+                    <!-- Tab Content -->
+                    <div class="tab-content" id="myTabContent@(results.IndexOf(result))">
+
+                        <!-- Tam Eşleşenler -->
+                        <div class="tab-pane fade show active" id="matches-@(results.IndexOf(result))" role="tabpanel">
+                            @if (result.Matches.Any())
+                            {
+                                <div class="table-container">
+                                    <div class="table-header">
+                                        <h5 class="text-success">
+                                            <i class="fas fa-check-circle me-2"></i>
+                                            Tam Eşleşen Kayıtlar (@result.Matches.Count)
+                                        </h5>
+                                    </div>
+
+                                    <div class="table-responsive">
+                                        <table class="table table-striped table-hover">
+                                            <thead class="table-success">
+                                                <tr>
+                                                    <th>Kişi/Kayıt</th>
+                                                    <th>Eşleşme Oranı</th>
+                                                    <th>Eşleşen Alanlar</th>
+                                                    <th>Detay</th>
+                                                </tr>
+                                            </thead>
+                                            <tbody>
+                                                @foreach (var match in result.Matches)
+                                                {
+                                                    <tr>
+                                                        <td>
+                                                            <strong class="text-primary">@match.PrimaryKey</strong>
+                                                            @if (match.KeyValues != null && match.KeyValues.Any())
+                                                            {
+                                                                <br>
+                                                                <small class="text-muted">
+                                                                    @foreach (var kv in match.KeyValues)
+                                                                    {
+                                                                        <span class="badge bg-light text-dark me-1">@kv.Key: @kv.Value</span>
+                                                                    }
+                                                                </small>
+                                                            }
+                                                        </td>
+                                                        <td>
+                                                            <div class="progress" style="height: 20px;">
+                                                                <div class="progress-bar bg-success" role="progressbar"
+                                                                    style="width: @(match.MatchPercentage)%">
+                                                                    @(match.MatchPercentage.ToString("F1"))%
+                                                                </div>
+                                                            </div>
+                                                        </td>
+                                                        <td>
+                                                            @foreach (var column in match.MatchingColumns.Take(3))
+                                                            {
+                                                                <span class="badge bg-success me-1">@column</span>
+                                                            }
+                                                            @if (match.MatchingColumns.Count > 3)
+                                                            {
+                                                                <small class="text-muted">+@(match.MatchingColumns.Count - 3) tane daha</small>
+                                                            }
+                                                        </td>
+                                                        <td>
+                                                            <button class="btn btn-outline-primary btn-sm"
+                                                                onclick="showDetails('@match.PrimaryKey', 'success')">
+                                                                <i class="fas fa-eye"></i>
+                                                            </button>
+                                                        </td>
+                                                    </tr>
+                                                }
+                                            </tbody>
+                                        </table>
+                                    </div>
+                                </div>
+                            }
+                            else
+                            {
+                                <div class="empty-state">
+                                    <i class="fas fa-search text-muted"></i>
+                                    <h5 class="text-muted">Tam eşleşen kayıt bulunamadı</h5>
+                                </div>
+                            }
+                        </div>
+
+                        <!-- Kısmi Eşleşenler -->
+                        <div class="tab-pane fade" id="mismatches-@(results.IndexOf(result))" role="tabpanel">
+                            @if (result.Mismatches.Any())
+                            {
+                                <div class="table-container">
+                                    <div class="table-header">
+                                        <h5 class="text-warning">
+                                            <i class="fas fa-exclamation-triangle me-2"></i>
+                                            Kısmi Eşleşen Kayıtlar (@result.Mismatches.Count)
+                                        </h5>
+                                    </div>
+
+                                    <div class="table-responsive">
+                                        <table class="table table-striped table-hover">
+                                            <thead class="table-warning">
+                                                <tr>
+                                                    <th>Kişi/Kayıt</th>
+                                                    <th>Eşleşme Oranı</th>
+                                                    <th>Eşleşen Alanlar</th>
+                                                    <th>Farklı Alanlar</th>
+                                                    <th>Detay</th>
+                                                </tr>
+                                            </thead>
+                                            <tbody>
+                                                @foreach (var mismatch in result.Mismatches)
+                                                {
+                                                    <tr>
+                                                        <td>
+                                                            <strong class="text-primary">@mismatch.PrimaryKey</strong>
+                                                            @if (mismatch.KeyValues != null && mismatch.KeyValues.Any())
+                                                            {
+                                                                <br>
+                                                                <small class="text-muted">
+                                                                    @foreach (var kv in mismatch.KeyValues)
+                                                                    {
+                                                                        <span class="badge bg-light text-dark me-1">@kv.Key: @kv.Value</span>
+                                                                    }
+                                                                </small>
+                                                            }
+                                                        </td>
+                                                        <td>
+                                                            <div class="progress" style="height: 20px;">
+                                                                <div class="progress-bar bg-warning" role="progressbar"
+                                                                    style="width: @(mismatch.MatchPercentage)%">
+                                                                    @(mismatch.MatchPercentage.ToString("F1"))%
+                                                                </div>
+                                                            </div>
+                                                        </td>
+                                                        <td>
+                                                            @foreach (var column in mismatch.MatchingColumns.Take(2))
+                                                            {
+                                                                <span class="badge bg-success me-1">@column</span>
+                                                            }
+                                                            @if (mismatch.MatchingColumns.Count > 2)
+                                                            {
+                                                                <small class="text-muted">+@(mismatch.MatchingColumns.Count - 2)</small>
+                                                            }
+                                                        </td>
+                                                        <td>
+                                                            @foreach (var column in mismatch.MismatchingColumns.Take(2))
+                                                            {
+                                                                <span class="badge bg-danger me-1">@column</span>
+                                                            }
+                                                            @if (mismatch.MismatchingColumns.Count > 2)
+                                                            {
+                                                                <small class="text-muted">+@(mismatch.MismatchingColumns.Count - 2)</small>
+                                                            }
+                                                        </td>
+                                                        <td>
+                                                            <button class="btn btn-outline-primary btn-sm"
+                                                                onclick="showDetails('@mismatch.PrimaryKey', 'warning')">
+                                                                <i class="fas fa-eye"></i>
+                                                            </button>
+                                                        </td>
+                                                    </tr>
+                                                }
+                                            </tbody>
+                                        </table>
+                                    </div>
+                                </div>
+                            }
+                            else
+                            {
+                                <div class="empty-state">
+                                    <i class="fas fa-search text-muted"></i>
+                                    <h5 class="text-muted">Kısmi eşleşen kayıt bulunamadı</h5>
+                                </div>
+                            }
+                        </div>
+
+                        <!-- Sadece Ana Dosyada Olanlar -->
+                        <div class="tab-pane fade" id="only-main-@(results.IndexOf(result))" role="tabpanel">
+                            @if (result.OnlyInMain.Any())
+                            {
+                                <div class="list-container">
+                                    <div class="table-header">
+                                        <h5 class="text-info">
+                                            <i class="fas fa-arrow-left me-2"></i>
+                                            Sadece Ana Dosyada Bulunanlar (@result.OnlyInMain.Count)
+                                        </h5>
+                                    </div>
+
+                                    <div class="row">
+                                        @foreach (var item in result.OnlyInMain)
+                                        {
+                                            <div class="col-md-4 mb-2">
+                                                <div class="list-item bg-light border rounded p-2">
+                                                    <i class="fas fa-user me-2 text-info"></i>
+                                                    <strong>@item</strong>
+                                                </div>
+                                            </div>
+                                        }
+                                    </div>
+                                </div>
+                            }
+                            else
+                            {
+                                <div class="empty-state">
+                                    <i class="fas fa-balance-scale text-muted"></i>
+                                    <h5 class="text-muted">Tüm kayıtlar eşleşiyor</h5>
+                                </div>
+                            }
+                        </div>
+
+                        <!-- Sadece Karşılaştırma Dosyasında Olanlar -->
+                        <div class="tab-pane fade" id="only-comp-@(results.IndexOf(result))" role="tabpanel">
+                            @if (result.OnlyInComparison.Any())
+                            {
+                                <div class="list-container">
+                                    <div class="table-header">
+                                        <h5 class="text-secondary">
+                                            <i class="fas fa-arrow-right me-2"></i>
+                                            Sadece Karşılaştırma Dosyasında Bulunanlar (@result.OnlyInComparison.Count)
+                                        </h5>
+                                    </div>
+
+                                    <div class="row">
+                                        @foreach (var item in result.OnlyInComparison)
+                                        {
+                                            <div class="col-md-4 mb-2">
+                                                <div class="list-item bg-light border rounded p-2">
+                                                    <i class="fas fa-user me-2 text-secondary"></i>
+                                                    <strong>@item</strong>
+                                                </div>
+                                            </div>
+                                        }
+                                    </div>
+                                </div>
+                            }
+                            else
+                            {
+                                <div class="empty-state">
+                                    <i class="fas fa-balance-scale text-muted"></i>
+                                    <h5 class="text-muted">Tüm kayıtlar eşleşiyor</h5>
+                                </div>
+                            }
+                        </div>
+                    </div>
+                </div>
+            }
+        }
+    </div>
+}
+
+<script>
+    function showDetails(primaryKey, type) {
+        alert('Detay gösterimi için: ' + primaryKey + ' (' + type + ')');
+        // Burada modal pencere açabilirsiniz
+    }
+
+    // Çoklu anahtar yönetimi
+    document.addEventListener('DOMContentLoaded', function () {
+        const keyInput = document.getElementById('keyColumnsInput');
+        const selectedKeysDiv = document.getElementById('selectedKeys');
+        const selectedKeysContainer = document.getElementById('selectedKeysContainer');
+        const suggestionBtns = document.querySelectorAll('.suggestion-btn');
+        const resetBtn = document.getElementById('resetBtn');
+        const newComparisonBtn = document.getElementById('newComparisonBtn');
+        const uploadForm = document.getElementById('uploadForm');
+
+        // Sıfırlama butonu
+        if (resetBtn) {
+            resetBtn.addEventListener('click', function () {
+                // Onay dialogu
+                if (confirm('Tüm veriler silinecek ve sayfa sıfırlanacak. Devam etmek istiyor musunuz?')) {
+                    resetPage();
+                }
+            });
+        }
+
+        // Yeni karşılaştırma butonu
+        if (newComparisonBtn) {
+            newComparisonBtn.addEventListener('click', function () {
+                resetPage();
+            });
+        }
+
+        // Sayfa sıfırlama fonksiyonu
+        function resetPage() {
+            // Form sıfırla
+            if (uploadForm) {
+                uploadForm.reset();
+            }
+
+            // File input'ları sıfırla
+            const fileInputs = document.querySelectorAll('input[type="file"]');
+            fileInputs.forEach(input => {
+                input.value = '';
+                const section = input.closest('.file-upload-section');
+                if (section) {
+                    // Upload section'ı eski haline getir
+                    if (section.classList.contains('main-file')) {
+                        section.style.borderColor = '#28a745';
+                        section.style.background = 'linear-gradient(145deg, #f8fff8, #e8f5e8)';
+                        const icon = section.querySelector('.upload-icon');
+                        if (icon) {
+                            icon.className = 'fas fa-file-excel upload-icon';
+                            icon.style.color = '#28a745';
+                        }
+                    } else if (section.classList.contains('comparison-files')) {
+                        section.style.borderColor = '#ffc107';
+                        section.style.background = 'linear-gradient(145deg, #fffdf8, #fff3cd)';
+                        const icon = section.querySelector('.upload-icon');
+                        if (icon) {
+                            icon.className = 'fas fa-files upload-icon';
+                            icon.style.color = '#ffc107';
+                        }
+                    }
+
+                    const text = section.querySelector('.upload-text');
+                    if (text) {
+                        if (section.classList.contains('main-file')) {
+                            text.innerHTML = '<small class="text-muted">Maksimum dosya boyutu: 100MB</small>';
+                        } else {
+                            text.innerHTML = '<small class="text-muted">Ctrl tuşu ile birden fazla dosya seçebilirsiniz</small>';
+                        }
+                    }
+                }
+            });
+
+            // Anahtar input'u sıfırla
+            if (keyInput) {
+                keyInput.value = 'Ad Soyad';
+            }
+
+            // Seçili anahtarları gizle
+            if (selectedKeysDiv) {
+                selectedKeysDiv.style.display = 'none';
+            }
+
+            // Alert'leri kaldır
+            const alerts = document.querySelectorAll('.alert-custom, .alert-success, .alert-danger');
+            alerts.forEach(alert => {
+                alert.remove();
+            });
+
+            // Sonuçları gizle
+            const resultsSection = document.querySelector('.mt-5');
+            if (resultsSection && resultsSection.innerHTML.includes('Karşılaştırma Sonuçları')) {
+                resultsSection.remove();
+            }
+
+            // Scroll to top
+            window.scrollTo({ top: 0, behavior: 'smooth' });
+
+            // Success mesajı göster
+            showTemporaryMessage('Sayfa başarıyla sıfırlandı!', 'success');
+        }
+
+        // Geçici mesaj gösterme fonksiyonu
+        function showTemporaryMessage(message, type) {
+            const alertDiv = document.createElement('div');
+            alertDiv.className = `alert alert-${type} alert-custom alert-dismissible fade show`;
+            alertDiv.innerHTML = `
+            <i class="fas fa-check-circle me-2"></i>
+            ${message}
+            <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+        `;
+
+            const container = document.querySelector('.main-container');
+            const header = container.querySelector('header');
+            container.insertBefore(alertDiv, header.nextSibling);
+
+            // 3 saniye sonra otomatik kaldır
+            setTimeout(() => {
+                if (alertDiv && alertDiv.parentNode) {
+                    alertDiv.remove();
+                }
+            }, 3000);
+        }
+
+        // Öneri butonları
+        suggestionBtns.forEach(btn => {
+            btn.addEventListener('click', function () {
+                const key = this.getAttribute('data-key');
+                addKeyToInput(key);
+            });
+        });
+
+        // Anahtar ekleme fonksiyonu
+        function addKeyToInput(newKey) {
+            const currentValue = keyInput.value.trim();
+            const currentKeys = currentValue ? currentValue.split(',').map(k => k.trim()) : [];
+
+            if (!currentKeys.includes(newKey)) {
+                currentKeys.push(newKey);
+                keyInput.value = currentKeys.join(', ');
+                updateSelectedKeysDisplay();
+            }
+        }
+
+        // Seçili anahtarları görsel olarak göster
+        function updateSelectedKeysDisplay() {
+            const currentValue = keyInput.value.trim();
+            const keys = currentValue ? currentValue.split(',').map(k => k.trim()).filter(k => k) : [];
+
+            if (keys.length > 1) {
+                selectedKeysDiv.style.display = 'block';
+                selectedKeysContainer.innerHTML = '';
+
+                keys.forEach((key, index) => {
+                    const keyBadge = document.createElement('span');
+                    keyBadge.className = 'badge bg-primary me-2 mb-1 key-badge';
+                    keyBadge.innerHTML = `
+                    <i class="fas fa-key me-1"></i>
+                    ${key}
+                    <button type="button" class="btn-close btn-close-white ms-2" style="font-size: 0.7em;" onclick="removeKey(${index})"></button>
+                `;
+                    selectedKeysContainer.appendChild(keyBadge);
+                });
+            } else {
+                selectedKeysDiv.style.display = 'none';
+            }
+        }
+
+        // Anahtar silme fonksiyonu
+        window.removeKey = function (index) {
+            const currentValue = keyInput.value.trim();
+            const keys = currentValue ? currentValue.split(',').map(k => k.trim()).filter(k => k) : [];
+            keys.splice(index, 1);
+            keyInput.value = keys.join(', ');
+            updateSelectedKeysDisplay();
+        };
+
+        // Input değişikliklerini takip et
+        keyInput.addEventListener('input', updateSelectedKeysDisplay);
+
+        // İlk yüklemede kontrol et
+        updateSelectedKeysDisplay();
+    });
+</script>
